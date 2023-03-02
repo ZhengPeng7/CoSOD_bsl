@@ -18,6 +18,7 @@ class CoData(data.Dataset):
     def __init__(self, image_root, label_root, image_size, max_num, is_train):
 
         class_list = os.listdir(image_root)
+        self.name = image_root.split('/')[-1]
         self.size_train = image_size
         self.size_test = image_size
         self.data_size = (self.size_train, self.size_train) if is_train else (self.size_test, self.size_test)
@@ -110,6 +111,7 @@ class CoData(data.Dataset):
                 if not os.path.exists(image_paths[idx]):
                     image_paths[idx] = image_paths[idx].replace('.jpg', '.png') if image_paths[idx][-4:] == '.jpg' else image_paths[idx].replace('.png', '.jpg')
                 image = Image.open(image_paths[idx]).convert('RGB')
+                # print('image_paths[idx]:', image_paths[idx])
                 if not os.path.exists(label_paths[idx]):
                     label_paths[idx] = label_paths[idx].replace('.jpg', '.png') if label_paths[idx][-4:] == '.jpg' else label_paths[idx].replace('.png', '.jpg')
                 label = Image.open(label_paths[idx]).convert('L')

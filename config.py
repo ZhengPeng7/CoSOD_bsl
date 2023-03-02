@@ -4,8 +4,6 @@ import math
 
 class Config():
     def __init__(self) -> None:
-        self.device = ['cuda', 'cpu'][1]
-        self.root_dir = '../sod'
         self.validation = True
         self.valid_only_S = True
         # Backbone
@@ -21,8 +19,9 @@ class Config():
         self.dec_channel_inter = ['fixed', 'adap'][0]
 
         # Data loader
+        self.shorter_data_loader_pad = True
         self.preproc_methods = ['flip', 'enhance', 'rotate', 'crop', 'pepper'][:1]  # Augmentation
-        self.size = 1024
+        self.size = 256
         self.auto_pad = ['', 'adaptive', 'fixed'][2]
             # padding in online batchs.
             # All the padded image will be given a unique preproc, so the preproc is better done if padding chosen.
@@ -51,10 +50,12 @@ class Config():
         }
 
         # Others
+        self.device = ['cuda', 'cpu'][0]
         self.rand_seed = 7
 
-        # Read the validation range and validation step from shell script
+        # Read the dataset dir, validation range, and validation step from shell script
         with open('go.sh', 'r') as f:
             lines = f.readlines()
+            self.root_dir = [l.strip() for l in lines if 'root_dir=' in l][0].split('=')[-1]
             self.val_last = int([l.strip() for l in lines if 'val_last=' in l][0].split('=')[-1])
             self.save_step = int([l.strip() for l in lines if 'step=' in l][0].split('=')[-1])

@@ -1,6 +1,7 @@
 import os
 import argparse
 import numpy as np
+from itertools import cycle
 import torch
 import torch.optim as optim
 
@@ -46,22 +47,38 @@ args = parser.parse_args()
 config = Config()
 
 # Prepare dataset
-trainset = 'INS-CoS'
-if 'INS-CoS' in trainset.split('+'):
-    train_img_path = os.path.join(config.root_dir, 'images/INS-CoS')
-    train_gt_path = os.path.join(config.root_dir, 'gts/INS-CoS')
-    train_loader = get_loader(
-        train_img_path,
-        train_gt_path,
-        config.size,
-        1,
-        max_num=config.batch_size,
-        istrain=True,
-        shuffle=True,
-        num_workers=8,
-        pin=True
+train_loaders = []
+training_sets = 'INS-CoS+DUTS_class+coco-seg'
+for training_set in training_sets.split('+')[:1]:
+    train_loaders.append(
+        get_loader(
+            os.path.join(config.root_dir, 'images/{}'.format(training_set)),
+            os.path.join(config.root_dir, 'gts/{}'.format(training_set)),
+            config.size,
+            1,
+            max_num=config.batch_size,
+            istrain=True,
+            shuffle=True,
+            num_workers=8,
+            pin=True
+        )
     )
 
+# Multiple dataloader are allowed here,
+# shorter ones can choose to pad itself to keep pace with the longest ones.
+train_loaders = sorted(train_loaders, key=lambda x: len(x), reverse=True)
+for idx_train_loader, train_loader in enumerate(train_loaders):
+    # Count how many the longest datasets, suppose lengths = 10, 10, 8, 9
+    num_longest_datasets = idx_train_loader + 1
+    if idx_train_loader > len(train_loaders) - 2 or len(train_loaders[idx_train_loader + 1]) < len(train_loader):
+        break
+zipped_train_loaders = zip(
+    *[
+        train_loaders[idx_train_loader] if idx_train_loader < num_longest_datasets
+        else cycle(train_loaders[idx_train_loader]) if config.shorter_data_loader_pad else train_loaders[idx_train_loader]
+        for idx_train_loader in range(len(train_loaders))
+    ]
+)
 
 test_loaders = {}
 for testset in args.testsets.split('+'):
@@ -122,8 +139,8 @@ def main():
 
     val_measures = []
     for epoch in range(args.start_epoch, args.epochs + 1):
-        train_loss = train(epoch)
-        if config.validation and epoch > args.epochs - 30 and args.epoch - epoch % 10 == 0:
+        train_loss = train_epoch(epoch)
+        if config.validation and epoch >= args.epochs - config.val_last and (args.epochs - epoch) % config.save_step == 0:
             measures = validate(model, test_loaders, args.val_save, args.val_sets)
             val_measures.append(measures)
             print('Validation: S_measure on CoCA for epoch-{} is {:.4f}. Best epoch is epoch-{} with S_measure {:.4f}'.format(
@@ -151,16 +168,19 @@ def train_batch(model, batch, loss_log):
     optimizer.step()
     return loss
 
-def train(epoch):
+def train_epoch(epoch):
     loss_log = AverageMeter()
+    loss_value = 0.
     global logger_loss_idx
     model.train()
 
-    for batch_idx, batch in enumerate(train_loader):
-        loss = train_batch(model, batch, loss_log)
+    for batch_idx, batchs in enumerate(zipped_train_loaders):
+        for idx_training_set, batch in enumerate(batchs):
+            loss_curr = train_batch(model, batch, loss_log)
+        loss_value += loss_curr
 
         with open(logger_loss_file, 'a') as f:
-            f.write('step {}, {}\n'.format(logger_loss_idx, loss))
+            f.write('step {}, {}\n'.format(logger_loss_idx, loss_value))
         logger_loss_idx += 1
         #<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<#
 
@@ -168,7 +188,7 @@ def train(epoch):
         if batch_idx % 20 == 0:
             # NOTE: Top2Down; [0] is the grobal slamap and [5] is the final output
             info_progress = 'Epoch[{0}/{1}] Iter[{2}/{3}]'.format(epoch, args.epochs, batch_idx, len(train_loader))
-            info_loss = 'Train Loss: loss_sal: {:.3f}'.format(loss)
+            info_loss = 'Train Loss: loss_sal: {:.3f}'.format(loss_value)
             info_loss += ', Loss_total: {loss.val:.3f} ({loss.avg:.3f})  '.format(loss=loss_log)
             logger.info(''.join((info_progress, info_loss)))
     info_loss = '@==Final== Epoch[{0}/{1}]  Train Loss: {loss.avg:.3f}  '.format(epoch, args.epochs, loss=loss_log)
