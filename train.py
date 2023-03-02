@@ -59,7 +59,7 @@ for training_set in training_sets.split('+')[:1]:
             max_num=config.batch_size,
             istrain=True,
             shuffle=True,
-            num_workers=8,
+            num_workers=config.num_workers,
             pin=True
         )
     )
