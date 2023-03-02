@@ -29,8 +29,8 @@ def validate(model, test_loaders, val_dir, testsets='CoCA'):
             # one batch contains all images of one class
             if idx_batch >= 1:
                 continue
-            inputs = batch[0].cuda().squeeze(0)
-            gts = batch[1].cuda().squeeze(0)
+            inputs = batch[0].to(config.device).squeeze(0)
+            gts = batch[1].to(config.device).squeeze(0)
             subpaths = batch[2]
             ori_sizes = batch[3]
             with torch.no_grad():

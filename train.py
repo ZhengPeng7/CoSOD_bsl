@@ -1,44 +1,29 @@
-from random import seed
-import numpy as np
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.autograd import Variable
-from util import Logger, AverageMeter, set_seed
 import os
 import argparse
-from dataset import get_loader
-
-import torch.nn.functional as F
+import numpy as np
+import torch
+import torch.optim as optim
 
 from config import Config
+from dataset import get_loader
 from loss import saliency_structure_consistency, SalLoss
-from util import generate_smoothed_gt
 
-from models.GCoNet import GCoNet
-
+from models.baseline import BSL
 from evaluation.valid import validate
+from util import Logger, AverageMeter, set_seed
 
 
 # Parameter from command line
 parser = argparse.ArgumentParser(description='')
-parser.add_argument('--model',
-                    default='GCoNet',
-                    type=str,
-                    help="Options: '', ''")
+parser.add_argument('--epochs', default=100, type=int)
 parser.add_argument('--resume',
                     default=None,
                     type=str,
                     help='path to latest checkpoint')
-parser.add_argument('--epochs', default=100, type=int)
 parser.add_argument('--start_epoch',
                     default=1,
                     type=int,
                     help='manual epoch number (useful on restarts)')
-parser.add_argument('--size',
-                    default=256,
-                    type=int,
-                    help='input size')
 parser.add_argument('--ckpt_dir', default=None, help='Temporary folder')
 
 parser.add_argument('--val_sets',
@@ -51,7 +36,7 @@ parser.add_argument('--val_save',
                     help=".")
 
 parser.add_argument('--testsets',
-                    default='CoCA+CoSOD3k+CoSal2015',
+                    default='CoCA',
                     type=str,
                     help="Options: 'CoCA', 'CoSal2015', 'CoSOD3k'")
 
@@ -63,12 +48,12 @@ config = Config()
 # Prepare dataset
 trainset = 'INS-CoS'
 if 'INS-CoS' in trainset.split('+'):
-    train_img_path = os.path.join(config.root_dir, 'images/INS-CoS3')
-    train_gt_path = os.path.join(config.root_dir, 'gts/INS-CoS3')
+    train_img_path = os.path.join(config.root_dir, 'images/INS-CoS')
+    train_gt_path = os.path.join(config.root_dir, 'gts/INS-CoS')
     train_loader = get_loader(
         train_img_path,
         train_gt_path,
-        args.size,
+        config.size,
         1,
         max_num=config.batch_size,
         istrain=True,
@@ -81,8 +66,8 @@ if 'INS-CoS' in trainset.split('+'):
 test_loaders = {}
 for testset in args.testsets.split('+'):
     test_loader = get_loader(
-        os.path.join('/root/autodl-tmp/datasets/sod', 'images', testset), os.path.join('/root/autodl-tmp/datasets/sod', 'gts', testset),
-        args.size, 1, istrain=False, shuffle=False, num_workers=8, pin=True
+        os.path.join(config.root_dir, 'images', testset), os.path.join(config.root_dir, 'gts', testset),
+        config.size, 1, istrain=False, shuffle=False, num_workers=8, pin=True
     )
     test_loaders[testset] = test_loader
 
@@ -98,26 +83,18 @@ logger_loss_file = os.path.join(args.ckpt_dir, "log_loss.txt")
 logger_loss_idx = 1
 
 # Init model
-device = torch.device("cuda")
+device = torch.device(config.device)
 
-model = GCoNet().to(device)
+model = BSL().to(config.device)
 
 # Setting optimizer
-if config.optimizer == 'AdamW':
-    optimizer = optim.AdamW(params=model.parameters(), lr=config.lr, weight_decay=1e-2)
-elif config.optimizer == 'Adam':
+if config.optimizer == 'Adam':
     optimizer = optim.Adam(params=model.parameters(), lr=config.lr, weight_decay=0)
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
     optimizer,
     milestones=[lde if lde > 0 else args.epochs + lde for lde in config.lr_decay_epochs],
     gamma=0.1
 )
-
-# Why freeze the backbone?...
-if config.freeze:
-    for key, value in model.named_parameters():
-        if 'bb.' in key:
-            value.requires_grad = False
 
 
 # log model and optimizer params
@@ -144,9 +121,9 @@ def main():
             logger.info("=> no checkpoint found at '{}'".format(args.resume))
 
     val_measures = []
-    for epoch in range(args.start_epoch, args.epochs+1):
+    for epoch in range(args.start_epoch, args.epochs + 1):
         train_loss = train(epoch)
-        if config.validation and epoch > 5:#args.epochs-1:
+        if config.validation and epoch > args.epochs - 30 and args.epoch - epoch % 10 == 0:
             measures = validate(model, test_loaders, args.val_save, args.val_sets)
             val_measures.append(measures)
             print('Validation: S_measure on CoCA for epoch-{} is {:.4f}. Best epoch is epoch-{} with S_measure {:.4f}'.format(
@@ -158,26 +135,29 @@ def main():
         lr_scheduler.step()
 
 
+def train_batch(model, batch, loss_log):
+    inputs = batch[0].to(config.device).squeeze(0)
+    gts = batch[1].to(config.device).squeeze(0)
+
+    return_values = model(inputs)
+    scaled_preds = return_values[0]
+
+    loss = sal_loss(scaled_preds, gts)
+
+    loss_log.update(loss, inputs.size(0))
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+    return loss
+
 def train(epoch):
     loss_log = AverageMeter()
     global logger_loss_idx
     model.train()
 
     for batch_idx, batch in enumerate(train_loader):
-        inputs = batch[0].to(device).squeeze(0)
-        gts = batch[1].to(device).squeeze(0)
-
-        return_values = model(inputs)
-        scaled_preds = return_values[0]
-
-        loss = sal_loss(scaled_preds, gts)
-
-        loss_log.update(loss, inputs.size(0))
-
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
+        loss = train_batch(model, batch, loss_log)
 
         with open(logger_loss_file, 'a') as f:
             f.write('step {}, {}\n'.format(logger_loss_idx, loss))

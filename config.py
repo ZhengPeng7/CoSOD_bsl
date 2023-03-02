@@ -1,31 +1,40 @@
 import os
+import math
 
 
 class Config():
     def __init__(self) -> None:
-        self.root_dir = '/root/autodl-tmp/datasets/sod'
+        self.device = ['cuda', 'cpu'][1]
+        self.root_dir = '../sod'
+        self.validation = True
         self.valid_only_S = True
         # Backbone
         self.bb = ['cnn-vgg16', 'cnn-vgg16bn', 'cnn-resnet50', 'trans-pvt'][3]
-        self.pvt_weights = ['../bb_weights/pvt_v2_b2.pth', ''][0]
-        # BN
-        self.use_bn = self.bb not in ['cnn-vgg16']
-        # Augmentation
-        self.preproc_methods = ['flip', 'enhance', 'rotate', 'crop', 'pepper'][:3]
+        self.pvt_weights = ['../bb_weights/pvt_v2_b2.pth', ''][1]
+        self.freeze_bb = True
 
         # Components
-        self.consensus = ['', 'GCAM', 'GWM', 'SGS'][1]
+        self.consensus = ['', 'GCAM'][0]
         self.dec_blk = ['ResBlk'][0]
-        self.GCAM_metric = ['online', 'offline', ''][0] if self.consensus else ''
-        # Training
-        self.batch_size = 16
-        self.loadN = 2
         self.dec_att = ['', 'ASPP'][0]
+        self.dilation = 1
+        self.dec_channel_inter = ['fixed', 'adap'][0]
+
+        # Data loader
+        self.preproc_methods = ['flip', 'enhance', 'rotate', 'crop', 'pepper'][:1]  # Augmentation
+        self.size = 1024
         self.auto_pad = ['', 'adaptive', 'fixed'][2]
+            # padding in online batchs.
+            # All the padded image will be given a unique preproc, so the preproc is better done if padding chosen.
+        self.num_workers = 8
+        self.batch_size = 16    # batch size per group
+        self.loadN = 2          # load N groups per batch
+        # Training
         self.optimizer = ['Adam'][0]
-        self.lr = 1e-4
-        self.freeze = True
-        self.lr_decay_epochs = [10000]    # Set to negative N to decay the lr in the last N-th epoch.
+        self.lr = 1e-4 * math.sqrt(self.batch_size / 16)  # adapt the lr linearly
+        self.lr_decay_epochs = [1e7]
+            # Set to N / -N to decay the lr in the N-th / last N-th epoch, can decay multiple times: [N1, N2, ...].
+
         # Loss
         losses = ['sal']
         self.loss = losses[:]
@@ -41,10 +50,11 @@ class Config():
             'triplet': 3 * 0,
         }
 
-        self.validation = True
+        # Others
         self.rand_seed = 7
-        run_sh_file = [f for f in os.listdir('.') if 'go' in f and '.sh' in f] + [os.path.join('..', f) for f in os.listdir('..') if 'gco' in f and '.sh' in f]
-        with open(run_sh_file[0], 'r') as f:
+
+        # Read the validation range and validation step from shell script
+        with open('go.sh', 'r') as f:
             lines = f.readlines()
             self.val_last = int([l.strip() for l in lines if 'val_last=' in l][0].split('=')[-1])
             self.save_step = int([l.strip() for l in lines if 'step=' in l][0].split('=')[-1])

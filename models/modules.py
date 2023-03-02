@@ -3,8 +3,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import fvcore.nn.weight_init as weight_init
-from functools import partial
-from einops import rearrange
 
 from config import Config
 
@@ -13,27 +11,25 @@ config = Config()
 
 
 class ResBlk(nn.Module):
-    def __init__(self, channel_in=64, channel_out=64, groups=0):
+    def __init__(self, channel_in=64, channel_out=64, channel_inter=64, dilation=config.dilation):
         super(ResBlk, self).__init__()
-        self.conv_in = nn.Conv2d(channel_in, 64, 3, 1, 1)
+        channel_inter = channel_in // 4 if config.dec_channel_inter == 'adap' else 64
+        self.conv_in = nn.Conv2d(channel_in, channel_inter, 3, 1, padding=dilation, dilation=dilation)
         self.relu_in = nn.ReLU(inplace=True)
         if config.dec_att == 'ASPP':
-            self.dec_att = ASPP(channel_in=64)
-        self.conv_out = nn.Conv2d(64, channel_out, 3, 1, 1)
-        if config.use_bn:
-            self.bn_in = nn.BatchNorm2d(64)
-            self.bn_out = nn.BatchNorm2d(channel_out)
+            self.dec_att = ASPP(channel_in=channel_inter)
+        self.conv_out = nn.Conv2d(channel_inter, channel_out, 3, 1, padding=dilation, dilation=dilation)
+        self.bn_in = nn.BatchNorm2d(channel_inter)
+        self.bn_out = nn.BatchNorm2d(channel_out)
 
     def forward(self, x):
         x = self.conv_in(x)
-        if config.use_bn:
-            x = self.bn_in(x)
+        x = self.bn_in(x)
         x = self.relu_in(x)
         if config.dec_att:
             x = self.dec_att(x)
         x = self.conv_out(x)
-        if config.use_bn:
-            x = self.bn_out(x)
+        x = self.bn_out(x)
         return x
 
 
@@ -50,6 +46,7 @@ class _ASPPModule(nn.Module):
         x = self.bn(x)
 
         return self.relu(x)
+
 
 class ASPP(nn.Module):
     def __init__(self, channel_in=64, output_stride=16):
@@ -91,46 +88,6 @@ class ASPP(nn.Module):
         x = self.relu(x)
 
         return self.dropout(x)
-
-
-class GWM(nn.Module):
-    def __init__(self, channel_in, num_groups1=8, num_groups2=4, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
-        super(GWM, self).__init__()
-        self.num_heads = num_heads
-        self.num_groups1 = num_groups1
-        self.num_groups2 = num_groups2
-        head_dim = channel_in // num_heads
-        self.scale = qk_scale or head_dim ** -0.5
-
-        self.qkv = nn.Linear(channel_in, channel_in * 3, bias=qkv_bias)
-        self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(channel_in, channel_in)
-        self.proj_drop = nn.Dropout(proj_drop)
-
-    def forward(self, x, recursive_index=False):
-        B, N, C = x.shape
-        if recursive_index == False:
-            num_groups = self.num_groups1
-        else:
-            num_groups = self.num_groups2
-            if num_groups != 1:
-                idx = torch.randperm(N)
-                x = x[:,idx,:]
-                inverse = torch.argsort(idx)
-        qkv = self.qkv(x).reshape(B, num_groups, N // num_groups, 3, self.num_heads, C // self.num_heads).permute(3, 0, 1, 4, 2, 5)  
-        q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
-
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(2, 3).reshape(B, num_groups, N // num_groups, C)
-        x = x.permute(0, 3, 1, 2).reshape(B, C, N).transpose(1, 2)
-        if recursive_index == True and num_groups != 1:
-            x = x[:,inverse,:]
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        return x
 
 
 class CoAttLayer(nn.Module):
@@ -211,48 +168,4 @@ class GCAM(nn.Module):
         x = x * x_w
         x = self.conv6(x)
 
-        return x
-
-
-class SGS(nn.Module):
-    def __init__(self, channel_in, num_groups1=8, num_groups2=4, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
-        super(SGS, self).__init__()
-        self.num_heads = num_heads
-        self.num_groups1 = num_groups1
-        self.num_groups2 = num_groups2
-        head_dim = channel_in // num_heads
-        self.scale = qk_scale or head_dim ** -0.5
-        self.normer = partial(nn.LayerNorm, eps=1e-6)(channel_in)
-
-        self.qkv = nn.Linear(channel_in, channel_in * 3, bias=qkv_bias)
-        self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(channel_in, channel_in)
-        self.proj_drop = nn.Dropout(proj_drop)
-
-    def forward(self, x, recursive_index=False):
-        batch_size, chl, hei, wid = x.shape
-        x = rearrange(x, 'b c h w -> b (h w) c')
-        B, N, C = x.shape
-        if recursive_index == False:
-            num_groups = self.num_groups1
-        else:
-            num_groups = self.num_groups2
-            if num_groups != 1:
-                idx = torch.randperm(N)
-                x = x[:,idx,:]
-                inverse = torch.argsort(idx)
-        qkv = self.qkv(x).reshape(B, num_groups, N // num_groups, 3, self.num_heads, C // self.num_heads).permute(3, 0, 1, 4, 2, 5)  
-        q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
-
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(2, 3).reshape(B, num_groups, N // num_groups, C)
-        x = x.permute(0, 3, 1, 2).reshape(B, C, N).transpose(1, 2)
-        if recursive_index == True and num_groups != 1:
-            x = x[:,inverse,:]
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        x = rearrange(x, 'b (h w) c -> b c h w', h=hei, w=wid)
         return x

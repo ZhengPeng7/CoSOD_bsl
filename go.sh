@@ -4,7 +4,7 @@ method="$1"
 epochs=1
 
 # Train
-CUDA_VISIBLE_DEVICES=0 python train.py --ckpt_dir ckpt/${method} --epochs ${epochs}
+python train.py --ckpt_dir ckpt/${method} --epochs ${epochs}
 
 
 # # Test & Eval
