@@ -78,7 +78,6 @@ class BSL(nn.Module):
         self.conv_out1 = nn.Sequential(nn.Conv2d(lateral_channels_in[bb][3]//2, 1, 1, 1, 0))
 
         if self.config.freeze_bb:
-            print(self.named_parameters())
             for key, value in self.named_parameters():
                 if 'bb.' in key:
                     value.requires_grad = False

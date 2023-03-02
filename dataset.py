@@ -111,7 +111,6 @@ class CoData(data.Dataset):
                 if not os.path.exists(image_paths[idx]):
                     image_paths[idx] = image_paths[idx].replace('.jpg', '.png') if image_paths[idx][-4:] == '.jpg' else image_paths[idx].replace('.png', '.jpg')
                 image = Image.open(image_paths[idx]).convert('RGB')
-                # print('image_paths[idx]:', image_paths[idx])
                 if not os.path.exists(label_paths[idx]):
                     label_paths[idx] = label_paths[idx].replace('.jpg', '.png') if label_paths[idx][-4:] == '.jpg' else label_paths[idx].replace('.png', '.jpg')
                 label = Image.open(label_paths[idx]).convert('L')

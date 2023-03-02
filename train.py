@@ -49,7 +49,7 @@ config = Config()
 # Prepare dataset
 train_loaders = []
 training_sets = 'INS-CoS+DUTS_class+coco-seg'
-for training_set in training_sets.split('+')[:1]:
+for training_set in training_sets.split('+')[:2]:
     train_loaders.append(
         get_loader(
             os.path.join(config.root_dir, 'images/{}'.format(training_set)),
@@ -72,19 +72,17 @@ for idx_train_loader, train_loader in enumerate(train_loaders):
     num_longest_datasets = idx_train_loader + 1
     if idx_train_loader > len(train_loaders) - 2 or len(train_loaders[idx_train_loader + 1]) < len(train_loader):
         break
-zipped_train_loaders = zip(
-    *[
+train_loaders_aligned = [
         train_loaders[idx_train_loader] if idx_train_loader < num_longest_datasets
         else cycle(train_loaders[idx_train_loader]) if config.shorter_data_loader_pad else train_loaders[idx_train_loader]
         for idx_train_loader in range(len(train_loaders))
     ]
-)
 
 test_loaders = {}
 for testset in args.testsets.split('+'):
     test_loader = get_loader(
         os.path.join(config.root_dir, 'images', testset), os.path.join(config.root_dir, 'gts', testset),
-        config.size, 1, istrain=False, shuffle=False, num_workers=8, pin=True
+        config.size, 1, istrain=False, shuffle=False, num_workers=int(config.num_workers//2), pin=True
     )
     test_loaders[testset] = test_loader
 
@@ -170,11 +168,13 @@ def train_batch(model, batch, loss_log):
 
 def train_epoch(epoch):
     loss_log = AverageMeter()
-    loss_value = 0.
     global logger_loss_idx
     model.train()
 
-    for batch_idx, batchs in enumerate(zipped_train_loaders):
+    for batch_idx, batchs in enumerate(zip(*train_loaders_aligned)):
+        # Do not xxx = zip(*train_loaders)!
+        # If you assign it separately before, xxx will stop iteration after its first epoch.
+        loss_value = 0.
         for idx_training_set, batch in enumerate(batchs):
             loss_curr = train_batch(model, batch, loss_log)
         loss_value += loss_curr
@@ -187,7 +187,7 @@ def train_epoch(epoch):
         # Logger
         if batch_idx % 20 == 0:
             # NOTE: Top2Down; [0] is the grobal slamap and [5] is the final output
-            info_progress = 'Epoch[{0}/{1}] Iter[{2}/{3}]'.format(epoch, args.epochs, batch_idx, len(train_loader))
+            info_progress = 'Epoch[{0}/{1}] Iter[{2}/{3}]'.format(epoch, args.epochs, batch_idx, len(train_loaders[0]))
             info_loss = 'Train Loss: loss_sal: {:.3f}'.format(loss_value)
             info_loss += ', Loss_total: {loss.val:.3f} ({loss.avg:.3f})  '.format(loss=loss_log)
             logger.info(''.join((info_progress, info_loss)))
