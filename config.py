@@ -12,7 +12,7 @@ class Config():
         self.freeze_bb = True
 
         # Components
-        self.consensus = ['', 'GCAM'][0]
+        self.consensus = ['', 'GCAM'][1]
         self.dec_blk = ['ResBlk'][0]
         self.dec_att = ['', 'ASPP'][0]
         self.dilation = 1
