@@ -48,8 +48,8 @@ config = Config()
 
 # Prepare dataset
 train_loaders = []
-training_sets = 'INS-CoS+DUTS_class+coco-seg'
-for training_set in training_sets.split('+')[:1]:
+training_sets = 'INS-CoS'#+DUTS_class+coco-seg'
+for training_set in training_sets.split('+')[:]:
     train_loaders.append(
         get_loader(
             os.path.join(config.root_dir, 'images/{}'.format(training_set)),
