@@ -1,10 +1,8 @@
-#!/bin/bash
-# Run script
 method="$1"
-epochs=10
+epochs=200
 
 # Train
-python train.py --ckpt_dir ckpt/${method} --epochs ${epochs}
+CUDA_VISIBLE_DEVICES=$2 python train.py --ckpt_dir ckpt/${method} --epochs ${epochs}
 
 
 # # Test & Eval
@@ -14,7 +12,7 @@ python train.py --ckpt_dir ckpt/${method} --epochs ${epochs}
 #     rm -rf ${root_dir}/preds/${method}
 # fi
 
-# val_last=30
+# val_last=100
 # step=10
 # root_dir=/root/datasets/sod
 # for ((ep=${epochs};ep>${epochs}-${val_last};ep-=${step}))

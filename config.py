@@ -8,7 +8,7 @@ class Config():
         self.valid_only_S = True
         # Backbone
         self.bb = ['cnn-vgg16', 'cnn-vgg16bn', 'cnn-resnet50', 'trans-pvt'][3]
-        self.pvt_weights = ['../bb_weights/pvt_v2_b2.pth', ''][0]
+        self.pvt_weights = ['../../../weights/pvt_v2_b2.pth', ''][0]
         self.freeze_bb = True
 
         # Components
@@ -20,9 +20,9 @@ class Config():
 
         # Data loader
         self.shorter_data_loader_pad = True
-        self.preproc_methods = ['flip', 'enhance', 'rotate', 'crop', 'pepper'][:1]  # Augmentation
+        self.preproc_methods = ['flip', 'enhance', 'rotate', 'crop', 'pepper'][:3]  # Augmentation
         self.size = 256
-        self.auto_pad = ['', 'adaptive', 'fixed'][0]
+        self.auto_pad = ['', 'adaptive', 'fixed'][2]
             # padding in online batchs.
             # All the padded image will be given a unique preproc, so the preproc is better done if padding chosen.
         self.num_workers = 8

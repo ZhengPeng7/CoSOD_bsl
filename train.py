@@ -37,7 +37,7 @@ parser.add_argument('--val_save',
                     help=".")
 
 parser.add_argument('--testsets',
-                    default='CoCA',
+                    default='CoCA+CoSOD3k+CoSal2015',
                     type=str,
                     help="Options: 'CoCA', 'CoSal2015', 'CoSOD3k'")
 
@@ -48,8 +48,8 @@ config = Config()
 
 # Prepare dataset
 train_loaders = []
-training_sets = 'INS-CoS+DUTS_class+coco-seg'
-for training_set in training_sets.split('+')[:2]:
+training_sets = 'coco-seg'
+for training_set in training_sets.split('+')[:1]:
     train_loaders.append(
         get_loader(
             os.path.join(config.root_dir, 'images/{}'.format(training_set)),
@@ -98,8 +98,6 @@ logger_loss_file = os.path.join(args.ckpt_dir, "log_loss.txt")
 logger_loss_idx = 1
 
 # Init model
-device = torch.device(config.device)
-
 model = BSL().to(config.device)
 
 # Setting optimizer
@@ -136,13 +134,15 @@ def main():
             logger.info("=> no checkpoint found at '{}'".format(args.resume))
 
     val_measures = []
+    val_epochs = []
     for epoch in range(args.start_epoch, args.epochs + 1):
         train_loss = train_epoch(epoch)
         if config.validation and epoch >= args.epochs - config.val_last and (args.epochs - epoch) % config.save_step == 0:
             measures = validate(model, test_loaders, args.val_save, args.val_sets)
             val_measures.append(measures)
+            val_epochs.append(epoch)
             print('Validation: S_measure on CoCA for epoch-{} is {:.4f}. Best epoch is epoch-{} with S_measure {:.4f}'.format(
-                epoch, measures[0], np.argmax(np.array(val_measures)[:, 0].squeeze()), np.max(np.array(val_measures)[:, 0]))
+                epoch, measures[0], val_epochs[np.argmax(np.array(val_measures)[:, 0].squeeze())], np.max(np.array(val_measures)[:, 0]))
             )
         # Save checkpoint
         if epoch >= args.epochs - config.val_last and (args.epochs - epoch) % config.save_step == 0:

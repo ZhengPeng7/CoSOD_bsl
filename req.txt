@@ -1,0 +1,4 @@
+scipy
+fvcore
+timm
+opencv-python
