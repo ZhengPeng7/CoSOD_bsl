@@ -1,6 +1,8 @@
 # Savings
 tmp*
 ckpt*
+*.out
+*.pth
 
 
 # Byte-compiled / optimized / DLL files

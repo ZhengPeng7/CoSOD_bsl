@@ -12,13 +12,14 @@ import evaluation.metrics as Measure
 
 
 config = Config()
-def validate(model, test_loaders, val_dir, testsets='CoCA'):
+def validate(model, test_loaders, val_dir, testsets='CoCA', valid_only_S=True):
     model.eval()
 
     testsets = testsets.split('+')
     measures = []
-    for testset in testsets[:1]:
-        print('Validating {}...'.format(testset))
+    print('Validating ...', end='')
+    for testset in testsets[:]:
+        print(', ' + testset, end='')
         test_loader = test_loaders[testset]
         
         saved_root = os.path.join(val_dir, testset)
@@ -27,8 +28,8 @@ def validate(model, test_loaders, val_dir, testsets='CoCA'):
 
         for idx_batch, batch in enumerate(test_loader):
             # one batch contains all images of one class
-            if idx_batch >= 1:
-                continue
+            # if idx_batch >= 1:
+            #     continue
             inputs = batch[0].to(config.device).squeeze(0)
             gts = batch[1].to(config.device).squeeze(0)
             subpaths = batch[2]
@@ -52,9 +53,9 @@ def validate(model, test_loaders, val_dir, testsets='CoCA'):
                 if not os.path.exists(p):
                     p = ''.join((p[:-4], '.jpg' if p[-4:] == '.png' else '.png'))
                 gt_pth_lst.append(p)
-            s_measure = evaluator(gt_pth_lst, pred_pth_lst, only_S=config.valid_only_S)
+            s_measure = evaluator(gt_pth_lst, pred_pth_lst, only_S=valid_only_S)
             measures.append(s_measure)
-
+    print()
     model.train()
     return measures
 
@@ -97,7 +98,7 @@ def evaluator(gt_pth_lst, pred_pth_lst, only_S=True):
         mae = MAE.get_results()['mae']
         return fm, wfm, sm, em, mae
     else:
-        return sm
+        return [sm]
 
 
 def save_tensor_img(tenor_im, path):
