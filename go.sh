@@ -1,6 +1,6 @@
 method="$1"
-epochs=120
-val_last=70
+epochs=200
+val_last=100
 step=10
 root_dir=/root/datasets/sod
 

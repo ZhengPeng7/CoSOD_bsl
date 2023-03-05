@@ -46,15 +46,15 @@ def validate(model, test_loaders, val_dir, testsets='CoCA', valid_only_S=True):
                 res = nn.functional.interpolate(scaled_preds[inum].unsqueeze(0), size=ori_size, mode='bilinear', align_corners=True).sigmoid()
                 save_tensor_img(res, os.path.join(saved_root, subpath))
 
-            pred_pth_lst = glob(os.path.join(val_dir, testset, '*', '*'))
-            gt_pth_lst = []
-            for p in pred_pth_lst:
-                p = p.replace(val_dir, os.path.join(config.root_dir, 'gts'))
-                if not os.path.exists(p):
-                    p = ''.join((p[:-4], '.jpg' if p[-4:] == '.png' else '.png'))
-                gt_pth_lst.append(p)
-            s_measure = evaluator(gt_pth_lst, pred_pth_lst, only_S=valid_only_S)
-            measures.append(s_measure)
+        pred_pth_lst = glob(os.path.join(val_dir, testset, '*', '*'))
+        gt_pth_lst = []
+        for p in pred_pth_lst:
+            p = p.replace(val_dir, os.path.join(config.root_dir, 'gts'))
+            if not os.path.exists(p):
+                p = ''.join((p[:-4], '.jpg' if p[-4:] == '.png' else '.png'))
+            gt_pth_lst.append(p)
+        scores_per_dataset = evaluator(gt_pth_lst, pred_pth_lst, only_S=valid_only_S)
+        measures.append(scores_per_dataset)
     print()
     model.train()
     return measures

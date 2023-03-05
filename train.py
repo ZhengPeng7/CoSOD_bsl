@@ -26,16 +26,15 @@ parser.add_argument('--start_epoch',
                     type=int,
                     help='manual epoch number (useful on restarts)')
 parser.add_argument('--ckpt_dir', default=None, help='Temporary folder')
-
-parser.add_argument('--val_sets',
-                    default='CoCA',
-                    type=str,
-                    help="Options: 'CoCA+CoSal2015+CoSOD3k'")
 parser.add_argument('--val_save',
                     default='tmp4val_INS',
                     type=str,
                     help=".")
 
+parser.add_argument('--val_sets',
+                    default='CoCA',
+                    type=str,
+                    help="Options: 'CoCA+CoSal2015+CoSOD3k'")
 parser.add_argument('--testsets',
                     default='CoCA+CoSOD3k+CoSal2015',
                     type=str,
@@ -140,10 +139,10 @@ def main():
         if config.validation and epoch >= args.epochs - config.val_last and (args.epochs - epoch) % config.save_step == 0:
             measures = validate(model, test_loaders, args.val_save, args.val_sets, valid_only_S=config.valid_only_S)
             if config.valid_only_S:
-                val_measures.append(measures[0])
+                val_measures.append(measures[0][0])    #[testset][metric]
                 val_epochs.append(epoch)
                 print('Validation: S_measure on CoCA for epoch-{} is {:.4f}. Best epoch is epoch-{} with S_measure {:.4f}'.format(
-                    epoch, measures[0], val_epochs[np.argmax(np.array(val_measures)[:, 0].squeeze())], np.max(np.array(val_measures)[:, 0]))
+                    epoch, measures[0][0], val_epochs[np.argmax(np.array(val_measures)[:, 0].squeeze())], np.max(np.array(val_measures)[:, 0]))
                 )
             else:
                 pass
