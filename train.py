@@ -47,8 +47,8 @@ config = Config()
 
 # Prepare dataset
 train_loaders = []
-training_sets = 'INS-CoS'#+DUTS_class+coco-seg'
-for training_set in training_sets.split('+')[:]:
+training_sets = 'INS-CoS+DUTS_class+coco-seg'
+for training_set in training_sets.split('+')[1:2]:
     train_loaders.append(
         get_loader(
             os.path.join(config.root_dir, 'images/{}'.format(training_set)),
@@ -138,14 +138,39 @@ def main():
         train_loss = train_epoch(epoch)
         if config.validation and epoch >= args.epochs - config.val_last and (args.epochs - epoch) % config.save_step == 0:
             measures = validate(model, test_loaders, args.val_save, args.val_sets, valid_only_S=config.valid_only_S)
-            if config.valid_only_S:
-                val_measures.append(measures[0][0])    #[testset][metric]
-                val_epochs.append(epoch)
-                print('Validation: S_measure on CoCA for epoch-{} is {:.4f}. Best epoch is epoch-{} with S_measure {:.4f}'.format(
-                    epoch, measures[0][0], val_epochs[np.argmax(np.array(val_measures)[:, 0].squeeze())], np.max(np.array(val_measures)[:, 0]))
-                )
-            else:
-                pass
+            for idx_val_set, val_set in enumerate(args.val_sets.split('+')):
+                ## To be done for multiple val sets
+                # measures[val_set][metric]
+                if val_set == 'CoCA':
+                    val_measures.append(measures[idx_val_set][0])
+                    val_epochs.append(epoch)
+                if config.valid_only_S:
+                    print(
+                        'Validation: S_measure on CoCA for epoch-{} is {:.4f}. '
+                        'Best epoch is epoch-{} with S_measure {:.4f}'.format(
+                            epoch, measures[idx_val_set][0],
+                            val_epochs[np.argmax(val_measures)], np.max(val_measures)
+                        )
+                    )
+                else:
+                    metric_scores = {}
+                    for k, v in zip(['sm', 'mae', 'fm', 'wfm', 'em'], measures[idx_val_set]):
+                        metric_scores[k] = v['curve'].max() if isinstance(v, dict) else v
+                    for (metric, score) in metric_scores:
+                        if metric == 'sm':
+                            print(
+                                'Validation: {} on {} for epoch-{} is {:.4f}. '
+                                'Best epoch is epoch-{} with S_measure {:.4f}'.format(
+                                    metric, val_set, epoch, score,
+                                    val_epochs[np.argmax(val_measures)], np.max(val_measures)
+                                )
+                            )
+                        else:
+                            print(
+                                'Validation: {} on {} for epoch-{} is {:.4f}.'.format(
+                                    metric, val_set, epoch, score
+                                )
+                            )
         # Save checkpoint
         if epoch >= args.epochs - config.val_last and (args.epochs - epoch) % config.save_step == 0:
             torch.save(model.state_dict(), os.path.join(args.ckpt_dir, 'ep{}.pth'.format(epoch)))

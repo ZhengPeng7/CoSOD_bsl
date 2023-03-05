@@ -96,7 +96,7 @@ def evaluator(gt_pth_lst, pred_pth_lst, only_S=True):
         wfm = WFM.get_results()['wfm']
         em = EM.get_results()['em']
         mae = MAE.get_results()['mae']
-        return fm, wfm, sm, em, mae
+        return sm, mae, fm, wfm, em
     else:
         return [sm]
 
