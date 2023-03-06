@@ -16,7 +16,6 @@ from util import Logger, AverageMeter, set_seed
 
 # Parameter from command line
 parser = argparse.ArgumentParser(description='')
-parser.add_argument('--epochs', default=100, type=int)
 parser.add_argument('--resume',
                     default=None,
                     type=str,
@@ -26,11 +25,11 @@ parser.add_argument('--start_epoch',
                     type=int,
                     help='manual epoch number (useful on restarts)')
 parser.add_argument('--ckpt_dir', default=None, help='Temporary folder')
+
 parser.add_argument('--val_save',
                     default='tmp4val_INS',
                     type=str,
                     help=".")
-
 parser.add_argument('--val_sets',
                     default='CoCA',
                     type=str,
@@ -47,8 +46,8 @@ config = Config()
 
 # Prepare dataset
 train_loaders = []
-training_sets = 'INS-CoS+DUTS_class+coco-seg'
-for training_set in training_sets.split('+')[1:2]:
+training_sets = 'INS-CoS'
+for training_set in training_sets.split('+')[:]:
     train_loaders.append(
         get_loader(
             os.path.join(config.root_dir, 'images/{}'.format(training_set)),
@@ -104,7 +103,7 @@ if config.optimizer == 'Adam':
     optimizer = optim.Adam(params=model.parameters(), lr=config.lr, weight_decay=0)
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
     optimizer,
-    milestones=[lde if lde > 0 else args.epochs + lde for lde in config.lr_decay_epochs],
+    milestones=[lde if lde > 0 else config.epochs + lde for lde in config.lr_decay_epochs],
     gamma=0.1
 )
 
@@ -134,47 +133,48 @@ def main():
 
     val_measures = []
     val_epochs = []
-    for epoch in range(args.start_epoch, args.epochs + 1):
+    for epoch in range(args.start_epoch, config.epochs + 1):
         train_loss = train_epoch(epoch)
-        if config.validation and epoch >= args.epochs - config.val_last and (args.epochs - epoch) % config.save_step == 0:
-            measures = validate(model, test_loaders, args.val_save, args.val_sets, valid_only_S=config.valid_only_S)
-            for idx_val_set, val_set in enumerate(args.val_sets.split('+')):
-                ## To be done for multiple val sets
-                # measures[val_set][metric]
-                if val_set == 'CoCA':
-                    val_measures.append(measures[idx_val_set][0])
-                    val_epochs.append(epoch)
-                if config.valid_only_S:
-                    print(
-                        'Validation: S_measure on CoCA for epoch-{} is {:.4f}. '
-                        'Best epoch is epoch-{} with S_measure {:.4f}'.format(
-                            epoch, measures[idx_val_set][0],
-                            val_epochs[np.argmax(val_measures)], np.max(val_measures)
-                        )
-                    )
-                else:
-                    metric_scores = {}
-                    for k, v in zip(['sm', 'mae', 'fm', 'wfm', 'em'], measures[idx_val_set]):
-                        metric_scores[k] = v['curve'].max() if isinstance(v, dict) else v
-                    for (metric, score) in metric_scores:
-                        if metric == 'sm':
-                            print(
-                                'Validation: {} on {} for epoch-{} is {:.4f}. '
-                                'Best epoch is epoch-{} with S_measure {:.4f}'.format(
-                                    metric, val_set, epoch, score,
-                                    val_epochs[np.argmax(val_measures)], np.max(val_measures)
-                                )
-                            )
-                        else:
-                            print(
-                                'Validation: {} on {} for epoch-{} is {:.4f}.'.format(
-                                    metric, val_set, epoch, score
-                                )
-                            )
-        # Save checkpoint
-        if epoch >= args.epochs - config.val_last and (args.epochs - epoch) % config.save_step == 0:
-            torch.save(model.state_dict(), os.path.join(args.ckpt_dir, 'ep{}.pth'.format(epoch)))
         lr_scheduler.step()
+        when_to_val_by_epoch = epoch >= config.epochs - config.val_last and (config.epochs - epoch) % config.save_step
+        if when_to_val_by_epoch == 0:
+            # Save checkpoint
+            torch.save(model.state_dict(), os.path.join(args.ckpt_dir, 'ep{}.pth'.format(epoch)))
+            if config.validation:
+                measures = validate(model, test_loaders, args.val_save, args.val_sets, valid_only_S=config.valid_only_S)
+                for idx_val_set, val_set in enumerate(args.val_sets.split('+')):
+                    ## To be done for multiple val sets
+                    # measures[val_set][metric]
+                    if val_set == 'CoCA':
+                        val_measures.append(measures[idx_val_set][0])
+                        val_epochs.append(epoch)
+                    if config.valid_only_S:
+                        print(
+                            'Validation: S_measure on CoCA for epoch-{} is {:.4f}. '
+                            'Best epoch is epoch-{} with S_measure {:.4f}'.format(
+                                epoch, measures[idx_val_set][0],
+                                val_epochs[np.argmax(val_measures)], np.max(val_measures)
+                            )
+                        )
+                    else:
+                        metric_scores = {}
+                        for k, v in zip(['sm', 'mae', 'fm', 'wfm', 'em'], measures[idx_val_set]):
+                            metric_scores[k] = v['curve'].max() if isinstance(v, dict) else v
+                        for (metric, score) in metric_scores:
+                            if metric == 'sm':
+                                print(
+                                    'Validation: {} on {} for epoch-{} is {:.4f}. '
+                                    'Best epoch is epoch-{} with S_measure {:.4f}'.format(
+                                        metric, val_set, epoch, score,
+                                        val_epochs[np.argmax(val_measures)], np.max(val_measures)
+                                    )
+                                )
+                            else:
+                                print(
+                                    'Validation: {} on {} for epoch-{} is {:.4f}.'.format(
+                                        metric, val_set, epoch, score
+                                    )
+                                )
 
 
 def train_batch(model, batch, loss_log):
@@ -214,11 +214,11 @@ def train_epoch(epoch):
         # Logger
         if batch_idx % 20 == 0:
             # NOTE: Top2Down; [0] is the grobal slamap and [5] is the final output
-            info_progress = 'Epoch[{0}/{1}] Iter[{2}/{3}]'.format(epoch, args.epochs, batch_idx, len(train_loaders[0]))
+            info_progress = 'Epoch[{0}/{1}] Iter[{2}/{3}]'.format(epoch, config.epochs, batch_idx, len(train_loaders[0]))
             info_loss = 'Train Loss: loss_sal: {:.3f}'.format(loss_value)
             info_loss += ', Loss_total: {loss.val:.3f} ({loss.avg:.3f})  '.format(loss=loss_log)
             logger.info(''.join((info_progress, info_loss)))
-    info_loss = '@==Final== Epoch[{0}/{1}]  Train Loss: {loss.avg:.3f}  '.format(epoch, args.epochs, loss=loss_log)
+    info_loss = '@==Final== Epoch[{0}/{1}]  Train Loss: {loss.avg:.3f}  '.format(epoch, config.epochs, loss=loss_log)
     logger.info(info_loss)
 
     return loss_log.avg

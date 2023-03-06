@@ -56,6 +56,8 @@ class Config():
         # Read the dataset dir, validation range, and validation step from shell script
         with open('go.sh', 'r') as f:
             lines = f.readlines()
+            self.epochs = int([l.strip() for l in lines if 'epochs=' in l][0].split('=')[-1])
+            self.iterations = int([l.strip() for l in lines if 'iterations=' in l][0].split('=')[-1])
             self.root_dir = [l.strip() for l in lines if 'root_dir=' in l][0].split('=')[-1]
             self.val_last = int([l.strip() for l in lines if 'val_last=' in l][0].split('=')[-1])
             self.save_step = int([l.strip() for l in lines if 'step=' in l][0].split('=')[-1])
