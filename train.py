@@ -16,37 +16,19 @@ from util import Logger, AverageMeter, set_seed
 
 # Parameter from command line
 parser = argparse.ArgumentParser(description='')
-parser.add_argument('--resume',
-                    default=None,
-                    type=str,
-                    help='path to latest checkpoint')
-parser.add_argument('--start_epoch',
-                    default=1,
-                    type=int,
-                    help='manual epoch number (useful on restarts)')
+parser.add_argument('--resume', default=None, type=str, help='path to latest checkpoint')
+parser.add_argument('--start_epoch', default=1, type=int, help='manual epoch number (useful on restarts)')
 parser.add_argument('--ckpt_dir', default=None, help='Temporary folder')
-
-parser.add_argument('--val_save',
-                    default='tmp4val_INS',
-                    type=str,
-                    help=".")
-parser.add_argument('--val_sets',
-                    default='CoCA',
-                    type=str,
-                    help="Options: 'CoCA+CoSal2015+CoSOD3k'")
-parser.add_argument('--testsets',
-                    default='CoCA+CoSOD3k+CoSal2015',
-                    type=str,
-                    help="Options: 'CoCA', 'CoSal2015', 'CoSOD3k'")
-
+parser.add_argument('--val_save', default='tmp4val_INS', type=str, help=".")
+parser.add_argument('--val_sets', default='CoCA', type=str, help="Options: 'CoCA+CoSal2015+CoSOD3k'")
+parser.add_argument('--testsets', default='CoCA+CoSOD3k+CoSal2015', type=str, help="Options: 'CoCA', 'CoSal2015', 'CoSOD3k'")
 args = parser.parse_args()
-
 
 config = Config()
 
 # Prepare dataset
 train_loaders = []
-training_sets = 'INS-CoS'
+training_sets = 'INS-CoS+DUTS_class+coco-seg'
 for training_set in training_sets.split('+')[:]:
     train_loaders.append(
         get_loader(
@@ -136,8 +118,8 @@ def main():
     for epoch in range(args.start_epoch, config.epochs + 1):
         train_loss = train_epoch(epoch)
         lr_scheduler.step()
-        when_to_val_by_epoch = epoch >= config.epochs - config.val_last and (config.epochs - epoch) % config.save_step
-        if when_to_val_by_epoch == 0:
+        when_to_val_by_epoch = epoch >= config.epochs - config.val_last and (config.epochs - epoch) % config.save_step == 0
+        if when_to_val_by_epoch:
             # Save checkpoint
             torch.save(model.state_dict(), os.path.join(args.ckpt_dir, 'ep{}.pth'.format(epoch)))
             if config.validation:

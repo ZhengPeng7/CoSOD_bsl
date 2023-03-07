@@ -1,6 +1,6 @@
 #!/bin/bash
 # Set dst repo here.
-repo="Conensus1-DUTS"
+repo="Conensus1-DUTS_class+coco-seg"
 mkdir ../${repo}
 mkdir ../${repo}/evaluation
 mkdir ../${repo}/models
