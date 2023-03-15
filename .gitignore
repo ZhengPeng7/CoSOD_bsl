@@ -3,6 +3,7 @@ tmp*
 ckpt*
 *.out
 *.pth
+*_.png
 
 
 # Byte-compiled / optimized / DLL files

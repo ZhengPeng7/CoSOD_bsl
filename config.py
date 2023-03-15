@@ -19,6 +19,7 @@ class Config():
         self.dec_channel_inter = ['fixed', 'adap'][0]
 
         # Data loader
+        self.batch_size = 16    # batch size per group
         self.shorter_data_loader_pad = True
         self.preproc_methods = ['flip', 'enhance', 'rotate', 'crop', 'pepper'][:3]  # Augmentation
         self.size = 256
@@ -26,7 +27,6 @@ class Config():
             # padding in online batchs.
             # All the padded image will be given a unique preproc, so the preproc is better done if padding chosen.
         self.num_workers = 8
-        self.batch_size = 16    # batch size per group
         self.loadN = 2          # load N groups per batch
         # Training
         self.optimizer = ['Adam'][0]
